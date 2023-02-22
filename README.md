@@ -9,9 +9,9 @@ Parts of the code are based on the previous [Mega-Awry PoC code](https://github.
 ## Overview
 
 The code is organised in three parts:
-1. [ECB encryption oracle](ecb-oracle): verify the existence of the oracle in MEGAdrop.
-2. [MitM key-overwriting attacks](mitm): the two attacks described in the paper allow to decrypt a given AES-ECB block.
-3. [RSA key recovery](rsa): demonstrate how to extract the full RSA key using lattice techniques. 
+1. [ECB encryption oracle](code/ecb-oracle): verify the existence of the oracle in MEGAdrop.
+2. [MitM key-overwriting attacks](code/mitm): the two attacks described in the paper allow to decrypt a given AES-ECB block.
+3. [RSA key recovery](code/rsa): demonstrate how to extract the full RSA key using lattice techniques. 
 
 ## ECB encryption oracle (Section 2.2)
 
@@ -69,7 +69,7 @@ Requirements for the victim session:
 
 - [MEGA webclient v4.21.4](https://github.com/meganz/webclient/tree/v4.21.4) with the included `webclient-diff.patch` applied.
 - browser configured to connect to mitmproxy (see [docs](https://docs.mitmproxy.org/stable/overview-getting-started/#configure-your-browser-or-device)).
-- [Selenium WebDriver](https://www.selenium.dev/documentation/webdriver/getting_started/) for Python and Firefox. (Optional, only required for full automation with `victim.py`.)
+- [Selenium WebDriver](https://www.selenium.dev/documentation/webdriver/getting_started/) for Python and Firefox. (Optional, only required for full automation with [victim.py](code/mitm/victim.py).)
 
 The webclient was only modified to make it simpler to demonstrate the attack by repeating login attempts. No other modifications were made.
 
@@ -77,26 +77,26 @@ Tested on Arch Linux.
 
 ### Configuration
 
-There are several parameters in the main file `mitm.py`:
+There are several parameters in the main file [mitm.py](code/mitm/mitm.py):
 
 - `WHICH_ATTACK` is `1` for the first attack (based on modular inverse computation) and `2` for the second attack (based on small subgroups).
 - `VERSION` is either `'simple'` or `'full'`, as described in the paper. The first attack offers both, the second attack implements only the `'full'` version.
 - `WHICH_BLOCK` is the index of the AES-ECB block of `privk` the attack should recover, e.g. `0` for the first block.
-- `LOCAL = True` completely shuts out the real MEGA servers, using previously captured requests. The data for this must be given in `mitm.py` (the variables prefixed with `LOCAL_`). If `LOCAL = False`, the proxy first intercepts the authentication request and then starts the attack. The non-local version lets through a small number of requests that preceed the authentication request to the real MEGA servers.
-- `STATS = True` runs the attack in automated mode, starting a victim client session with Selenium, and collects statistics about the number of oracle calls. The test session's username and password must be filled in as `UNAME` and `PW` in `victim.py`. Fully implemented only for the first attack with `LOCAL = True`.
-- Both attacks make use of a simulated ECB oracle, however this is separate from the main attack code and only ever called as a black box. For this, fill in `MASTER_KEY` in `mitm_utils.py` for the chosen test session.
-- The webclient is assumed to run at https://webclient.local/login: if this is different, change the URL in `victim.py`.
+- `LOCAL = True` completely shuts out the real MEGA servers, using previously captured requests. The data for this must be given in [mitm.py](code/mitm/mitm.py) (the variables prefixed with `LOCAL_`). If `LOCAL = False`, the proxy first intercepts the authentication request and then starts the attack. The non-local version lets through a small number of requests that preceed the authentication request to the real MEGA servers.
+- `STATS = True` runs the attack in automated mode, starting a victim client session with Selenium, and collects statistics about the number of oracle calls. The test session's username and password must be filled in as `UNAME` and `PW` in [victim.py](code/mitm/victim.py). Fully implemented only for the first attack with `LOCAL = True`.
+- Both attacks make use of a simulated ECB oracle, however this is separate from the main attack code and only ever called as a black box. For this, fill in `MASTER_KEY` in [mitm_utils.py](code/mitm/mitm_utils.py) for the chosen test session.
+- The webclient is assumed to run at https://webclient.local/login: if this is different, change the URL in [victim.py](code/mitm/victim.py).
 
 ### How to run
 
 If `STATS = True` and `LOCAL = True`, do the following:
 
-1. Replace the `LOCAL_`-prefixed values (csid, privk, k, u) in `mitm.py` with the ones captured from an authentication request with that account.
+1. Replace the `LOCAL_`-prefixed values (csid, privk, k, u) in [mitm.py](code/mitm/mitm.py) with the ones captured from an authentication request with that account.
 2. Run the proxy via `mitmdump -q -s ./mitm.py`. When the precomputation completes, a new instance of Firefox should launch automatically and the attack begins to run.
 
 If `STATS = False` and `LOCAL = True`, do the following:
 
-1. Replace the `LOCAL_`-prefixed values (csid, privk, k, u) in `mitm.py` with the ones captured from an authentication request with that account.
+1. Replace the `LOCAL_`-prefixed values (csid, privk, k, u) in [mitm.py](code/mitm/mitm.py) with the ones captured from an authentication request with that account.
 2. Run the proxy via `mitmdump -q -s ./mitm.py`.
 3. When "Mitm initialisation done" appears, run `python3 victim.py` -- from now on the attack runs automatically.
 
@@ -120,4 +120,4 @@ Note that the implementation for the second attack is not as stable as the one f
 
 ## RSA key recovery (Section 5)
 
-The file [poc.py](rsa/poc.py) provides the code for the experiment verifying the success rate of recovering `q` from the private key using four blocks extracted with our MitM attacks.
+The file [poc.py](code/rsa/poc.py) provides the code for the experiment verifying the success rate of recovering `q` from the private key using four blocks extracted with our MitM attacks.
