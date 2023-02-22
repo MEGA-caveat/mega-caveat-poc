@@ -84,19 +84,21 @@ There are several parameters in the main file [mitm.py](code/mitm/mitm.py):
 - `WHICH_BLOCK` is the index of the AES-ECB block of `privk` the attack should recover, e.g. `0` for the first block.
 - `LOCAL = True` completely shuts out the real MEGA servers, using previously captured requests. The data for this must be given in [mitm.py](code/mitm/mitm.py) (the variables prefixed with `LOCAL_`). If `LOCAL = False`, the proxy first intercepts the authentication request and then starts the attack. The non-local version lets through a small number of requests that preceed the authentication request to the real MEGA servers.
 - `STATS = True` runs the attack in automated mode, starting a victim client session with Selenium, and collects statistics about the number of oracle calls. The test session's username and password must be filled in as `UNAME` and `PW` in [victim.py](code/mitm/victim.py). Fully implemented only for the first attack with `LOCAL = True`.
-- Both attacks make use of a simulated ECB oracle, however this is separate from the main attack code and only ever called as a black box. For this, fill in `MASTER_KEY` in [mitm_utils.py](code/mitm/mitm_utils.py) for the chosen test session.
-- The webclient is assumed to run at https://webclient.local/login: if this is different, change the URL in [victim.py](code/mitm/victim.py).
+
+Both attacks make use of a simulated ECB oracle, however this is separate from the main attack code and only ever called as a black box. For this, fill in `MASTER_KEY` in [mitm_utils.py](code/mitm/mitm_utils.py) for the chosen test session.
+
+The webclient is assumed to run at https://webclient.local/login: if this is different, change the URL in [victim.py](code/mitm/victim.py).
 
 ### How to run
 
 If `STATS = True` and `LOCAL = True`, do the following:
 
-1. Replace the `LOCAL_`-prefixed values (csid, privk, k, u) in [mitm.py](code/mitm/mitm.py) with the ones captured from an authentication request with that account.
+1. Replace the `LOCAL_`-prefixed values in [mitm.py](code/mitm/mitm.py) with the ones captured from an authentication request with that account.
 2. Run the proxy via `mitmdump -q -s ./mitm.py`. When the precomputation completes, a new instance of Firefox should launch automatically and the attack begins to run.
 
 If `STATS = False` and `LOCAL = True`, do the following:
 
-1. Replace the `LOCAL_`-prefixed values (csid, privk, k, u) in [mitm.py](code/mitm/mitm.py) with the ones captured from an authentication request with that account.
+1. Replace the `LOCAL_`-prefixed values in [mitm.py](code/mitm/mitm.py) with the ones captured from an authentication request with that account.
 2. Run the proxy via `mitmdump -q -s ./mitm.py`.
 3. When "Mitm initialisation done" appears, run `python3 victim.py` -- from now on the attack runs automatically.
 
