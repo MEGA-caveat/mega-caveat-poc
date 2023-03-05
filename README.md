@@ -1,6 +1,6 @@
 # README
 
-This documents the proof-of-concept code for the attacks described in the paper "Caveat Implementor! Key Recovery Attacks on MEGA". See [the website](https://mega-tera.github.io).
+This documents the proof-of-concept code for the attacks described in the paper "Caveat Implementor! Key Recovery Attacks on MEGA". See [the website](https://mega-caveat.github.io).
 
 :warning: This code is only intended to make our attacks reproducible. You should never run the attacks against any account that you do not own. Furthermore, it is the responsibility of the person executing the code in this repo to ensure they never put any disproportionate stress on MEGA's infrastructure, e.g., by spamming login requests. The code is provided without any guarantees and the person running the code bears all responsibility.
 
